@@ -14,7 +14,7 @@ be ready to create Esterel programs for BrickOS-Bibo.
 ## Installation
 To install scLego, type:
 
-   make ESTEREL_DISTRIB=<esterel repository> 
+   `make ESTEREL_DISTRIB=<esterel repository>`
 
 You may also set the PERL macro to the name of the Perl command on
 your system if it is different from the default "perl".
@@ -31,15 +31,15 @@ to Lego.
 
 Then, you can call :
 
-   esterel  -LLego controller.strl
+   `esterel  -LLego controller.strl`
 
 or
 
-   esterel  -ILego controller.strl
+   `esterel  -ILego controller.strl`
 
 or
 
-   esterel  -ALego controller.strl
+   `esterel  -ALego controller.strl`
 
 Option -simul is also supported if you want to simulate the controller 
 using xes or csimul.  You do not have to insert code for predefined
