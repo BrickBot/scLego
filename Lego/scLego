@@ -1,0 +1,570 @@
+# -*- perl -*-
+eval 'exec perl $0 "$@"'
+  if 0;
+
+use lib "./Lego";
+use lib "$ENV{ESTEREL}/lib/Lego";
+
+
+use LegoDefs;
+
+use EsterelType;
+
+require EsterelSignal;
+require ContactInput;
+require MotorDirOutput;
+require MotorSpeedOutput;
+require LightInput;
+require LightSensor;
+require LightOutput;
+require EsterelFunction;
+
+#===========================================================
+
+#==================
+# Arguments parsing
+#==================
+$dir_name = ".";
+$base_name = "scLego";
+
+while ( ($_ = $ARGV[0]) =~ /^-/ ) {
+  push(@esterel_args, $_);
+ ARGS:
+  {
+    /-D$/ && do { # extract dirname
+      shift;
+      $dir_name = $ARGV[0];
+      push(@esterel_args, $dir_name);
+      last ARGS;
+    };
+
+    /-B$/ && do { # extract basename
+      shift;
+      $base_name = $ARGV[0];
+      push(@esterel_args, $base_name);
+      last ARGS;
+    };
+
+    /-simul$/ && do { # simulation code ?
+      $simul_opt = 1;
+      last ARGS;
+    };
+
+    /-v$/ && do {
+      $verbose_opt = 1;
+      last ARGS;
+    };
+
+    exit 0 if /-access$/;
+    /-info$/ && do {
+      print STDERR <<'INFO';
+--- [sc|ssc|oc]Lego : Lego C code generator
+            version : p5
+	     author : Xavier.Fornari@sophia.inria.fr
+INFO
+  ;
+      exit 0;
+    };
+
+  }
+  shift;
+}
+if ( @ARGV > 0 ) {
+  # last argument
+  $input_file = $ARGV[0];
+}
+
+else {
+  die "*** Missing input file\n";
+}
+
+
+#========================================
+# Extracting information from main module
+#++++++++++++++++++++++++++++++++++++++++
+
+# open input file and parse it
+# if MOTOR_* constants are present without their default values, then
+# patch the file to add the value => it suppresses the .h generation, if
+# it is created only because  these constants are undefined
+
+# input file suffix
+$input_file =~ /\.(ssc|sc|oc)/;
+$suffix = $1;
+
+$error = 0;
+
+open(INPUT, $input_file) || die "*** Cannot open '$input_file'\n";
+
+$tmp = "/tmp/lego$$.$suffix";
+open(OUTPUT, ">$tmp") || die "*** Cannot open '$tmp'\n";
+
+$external_objects = 0;
+
+while (<INPUT>) {
+  
+ PARSE: {
+    
+    # found number of external objects
+    /(?:constants|procedures|functions|tasks)\s*:\s*(\d+)/ && do {
+      $external_objects += $1;
+    };
+
+    # Esterel main module name
+    m/^module:\s*(\w+)/ && do {
+      EsterelSignal->SetModuleName($1);
+      next PARSE;
+    };
+
+    # put correct constant values for MOTOR_*
+    if ( /constants:/ .. /end:/ ) {
+      next PARSE unless  /^\d+\s*:\s*(\w+)/;
+      
+      if ( ! exists $ValidConstants{$1} ) {
+	# not a known constants;
+	$external_objects-- if /value:/;
+	next PARSE;
+      }
+      
+      $constant = $1;
+      m/\$1/ || do {
+	warn "*** Constant '$constant' is not integer\n";
+	$error++;
+	next PARSE;
+      };
+
+      my $value;
+      $value = ( /value:\s*\#(\d+)/ ? $1 : undef );
+    CONSTANTS: {
+
+	$constant eq 'TICKS_PER_SECOND' && do {
+	  if  (defined $value ) {
+	    # save user value
+	    # normalize
+	    if ( $value > 1000 ) {
+	      warn ("--- TICKS_PER_SECOND > 1000 : set to 1000\n");
+	    }
+	    if ( $value < 1 ) {
+	      warn ("--- TICKS_PER_SECOND <  1 : set to 1\n");
+	    }
+	    $ValidConstants{$constant} = $value;
+	  }
+	  next CONSTANTS;
+	};
+
+	$constant eq 'DEFAULT_LIGHT_THRESHHOLD' && do {
+	  if  (defined $value ) {
+	    # save user value
+	    $ValidConstants{$constant} = $value;
+	  }
+	  next CONSTANTS;
+	};
+
+	# check if value present and correct
+	defined $value  && do {
+	  if ($value != $ValidConstants{$constant} ) {
+	    $error++;
+	    warn ("*** Constant $constant must have value ",
+		  $ValidConstants{$constant}, " (but it may be omitted)\n");
+	  }
+	  next CONSTANTS;
+	};
+
+	# !! patch intermediate code insert correct value
+	s/\$1/\$1 value: \#$ValidConstants{$constant}/;
+      }
+
+      $external_objects--; # known object
+      next PARSE;
+    }
+
+    # Check input/output signals and extract which are used.
+    if (/signals:/ .. /end:/) {
+      my $signal;
+    SIGNAL: {
+	# inputs
+	m/^\d+: (?:input|sensor):\s*(\S+)/ && do {
+	  # inputs
+	  $signal = $1;
+	  if ( exists $ValidInputs{$signal} ) {
+	    $signal = $ValidInputs{$signal};
+	    push(@inputs, $signal);
+	  }
+	  else {
+	    $error++;
+	    warn "*** signal '$signal' is not valid. See doc for API\n";
+	    next PARSE;
+	  }
+	  /sensor/ && $external_objects--; # for input function
+	  next SIGNAL;
+	};
+      
+	# outputs
+	m/^\d+: output:\s*(\S+)/ && do {
+	  # outputs
+	  $signal = $1;
+	  if ( exists $ValidOutputs{$signal} ) {
+	    $signal = $ValidOutputs{$signal};
+	    push(@outputs, $signal);
+	  }
+	  else {
+	    $error++;
+	    warn "*** signal '$signal' is not valid. See doc for API\n";
+	    next PARSE;
+	  }
+	  next SIGNAL;
+	};
+
+	last SIGNAL;
+      }
+      continue {
+	# set signal var index
+	m/(?:single|multiple):\s*(\d+)/ && do {
+	  $signal->SetVarIndex($1);
+	};
+      }
+      next PARSE;
+    }
+
+    if (/functions:/ .. /end:/) {
+      /(\w+)\s*\((.*)\)\s*:\s*(\S+)/ && do {
+	my $fnc = $1;
+	my $args = $2;
+	my $type = $3;
+	$args =~ s/^\s*//;
+	$args =~ s/\s*$//;
+	my @args = split (/\s*,/, $args);
+	if ( exists $ValidFunctions{$fnc} ) {
+	  $error++ unless $ValidFunctions{$fnc}->Check($fnc,
+						       \@args,
+						       $type);
+	  $external_objects--;
+	}
+      };
+      next PARSE;
+    }
+
+    if (/variables:/ .. /end:/) {
+      $VarToType[$1] = GetType($2) if /^(\d+)\s*:\s*(\S+)/;
+    }
+  }
+  print OUTPUT;
+}
+
+close(INPUT);
+close(OUTPUT);
+
+# Check signal types
+foreach $signal (@inputs, @outputs) {
+  $error++ if $signal->CheckType(\@VarToType);
+}
+# Checking whether two signals refer to the same Lego 
+# sensor or not
+%Ports = ();
+foreach $input (@inputs) {
+  $sensor = $input->LegoSensor();
+  ($Ports{$sensor} = $input, next) unless exists $Ports{$sensor};
+
+  if ( ($Ports{$sensor}->isa(LightSensorObject) and
+	$input->isa(ContactInput)) or
+       ($Ports{$sensor}->isa(ContactInput) and
+	$input->isa(LightSensorObject)) ) {
+    # not the same type of sensors
+    $error++;
+    warn('*** Signals ',
+	 $Ports{$sensor}->Name(),
+	 ' and ',
+	 $input->Name(),
+	 " are on same sensor $sensor\n");
+  }
+}
+
+if ($error) {
+  unlink $tmp;
+  ($prog = $0) =~ s/.*\W([\w.]+)$/$1/;
+  die "*** $prog: $error error(s)\n";
+}
+
+
+
+#=====================================================
+# Running Esterel compiler to actually generate C code
+#=====================================================
+# calling C code generator
+{
+  warn(join ' ', "$ENV{'ESTEREL'}/bin/${suffix}c", @esterel_args, $tmp, "\n")
+    if defined $verbose_opt;
+}
+$status = system("$ENV{'ESTEREL'}/bin/${suffix}c", @esterel_args, $tmp);
+die "*** ${suffix}c failed\n" if $status;
+
+unlink($tmp);
+
+#===============================
+# "Hacking" the C generated code
+#===============================
+$old_C = "$dir_name/$base_name.c";
+$new_C = "$dir_name/scLego$$.c";
+
+open(SRC, $old_C)
+    || die "*** Cannot open '$old_C'\n";
+open(C_FILE, ">$new_C")
+    || die "*** Cannot open '$new_C'\n";
+
+while (<SRC>) {
+  # skip #include "header.h" if not necessary, ie if all external
+  # objects are known and written in the C code.
+  next if (/$base_name.h/o && $external_objects == 0);
+  print C_FILE;
+}
+close SRC;
+unlink $old_C;
+
+# Special functions for light sensors
+#------------------------------------
+$c = $ValidConstants{DEFAULT_LIGHT_THRESHHOLD};
+print C_FILE <<C_CODE;
+/*========================================
+ *            LEGO(c) Specific Part
+ *========================================
+ */
+
+/* light threshholds for light sensors */
+static int LIGHT_THRESHHOLD[3] = {$c, $c, $c};
+
+C_CODE
+;
+
+# Known functions
+#----------------
+foreach $fnc (keys %ValidFunctions) {
+  $ValidFunctions{$fnc}->PrintCode(*C_FILE);
+  print C_FILE "\n";
+}
+
+# C code for simulation, do not add Lego code
+#--------------------------------------------
+if ( ! defined $simul_opt ) {
+
+  # Legos C definitions
+  #--------------------
+  print C_FILE <<LEGOS;
+
+/*========================================
+ *             LEGOS Definitions
+ *========================================
+ */
+#include <conio.h> 
+#include <unistd.h> 
+#include <dsensor.h> 
+#include <dmotor.h> 
+
+LEGOS
+  ;
+
+  # Print C output functions
+  #-------------------------
+  foreach $signal (@outputs) {
+    $signal->PrintCode(*C_FILE);
+  }
+
+  # Print C sensor functions
+  #-------------------------
+  foreach $signal (@inputs) {
+    $signal->PrintCode(*C_FILE);
+  }
+
+  # main code
+  #----------
+  my $module = EsterelSignal->ModuleName();
+  print C_FILE <<C_CODE;
+
+int main() 
+{ 
+  /* Initializations */
+C_CODE
+  ;
+
+  # light sensor initialization
+  #----------------------------
+  foreach $signal (@inputs) {
+    $signal->PrintInitialization(*C_FILE);
+  }
+
+  # code initialization
+  print C_FILE <<C_CODE;
+  ${module}_reset();
+
+C_CODE
+  ;
+
+  # main loop
+  #----------
+  print C_FILE <<C_CODE;
+  /* main loop */
+  while (1) { 
+    msleep( 1000 / $ValidConstants{TICKS_PER_SECOND} );              
+    /* we pool the sensors */ 
+C_CODE
+  ;
+
+  # input call
+  foreach $signal (@inputs) {
+    $signal->PrintCall(*C_FILE);
+  }
+  # end code
+  print C_FILE <<C_CODE; 
+    /* call to the automaton */ 
+    $module();                
+  }
+  return 0; 
+}
+C_CODE
+  ;
+}
+
+close C_FILE;
+rename($new_C, $old_C);
+exit 0;
+
+
+
+__END__
+
+=head1 NAME
+
+scLego ocLego sscLego - Lego C code generator
+
+=head1 SYNOPSIS
+
+    scLego [scoc options] file.sc
+    ocLego [sscoc options] file.oc
+    sscLego [sscc options] file.ssc
+
+=head1 DESCRIPTION
+
+Generates C code for Legos. Can be used as any Esterel C code
+generator. Copy B<scLego> into the Esterel distribution I<bin>
+directory, then creates hardlinks B<ocLego> -> B<scLego> and
+B<sscLego> -> B<scLego>. Code generators can be called using
+the following commands:
+
+=over 3
+
+=item Interpreted C code
+
+    esterel -ILego foo.strl
+
+=item Automaton C code
+
+    esterel -ALego foo.strl
+
+=item Equation C code
+
+    esterel -LLego foo.strl
+
+=back
+
+Code for simulation is also possible using the B<-simul> option.
+
+B<scLego> expects one or several predefined objects to be used. The
+next section API describes the Esterel specific API that must be used.
+
+B<scLego> parses the Esterel intermediate code given as input and
+defined the value of the constants if not defined in the Esterel
+code. Then it calls the actual C code generator. Finally, it modifies
+the generated C code to add output function definitions and a B<main>
+function.
+
+=head2 API
+
+ % STANDARD ESTEREL / LEGO INTERFACE
+ %----------------------------------
+ % Inputs are related to Lego sensors 1, 2 or 3.
+ % If input i is contected to a given type of sensor, say contact 
+ % sensor, then one cannot use the inputs associated to another 
+ % type. This will be checked at compile time.
+ % Constants without initial value are already known. There is no 
+ % need to set them in the C generated file.
+ 
+ % time control
+ %-------------
+ % Tells how many times the controller is called within one second.
+ % User can change the default value of 100, which may be omitted.
+ % Automaton is run each 1000 / TICKS_PER_SECOND ms.
+ constant TICKS_PER_SECOND = 100 : integer;  
+ 
+ % Engine control
+ %---------------
+ constant MOTOR_OFF   : integer,
+          MOTOR_FWD   : integer,
+          MOTOR_REV   : integer,
+          MOTOR_BRAKE : integer;
+ 
+ % If argument is MOTOR_FWD, return MOTOR_REV and vice versa
+ function CHANGE_MOTOR_DIR (integer) : integer; 
+ 
+ constant MAX_SPEED = 255 : integer;
+ 
+ output MOTOR_A_DIR   := MOTOR_OFF : integer, 
+        MOTOR_A_SPEED := 0         : integer;
+ 
+ output MOTOR_B_DIR   := MOTOR_OFF : integer,
+        MOTOR_B_SPEED := 0         : integer;
+ 
+ output MOTOR_C_DIR   := MOTOR_OFF : integer,
+        MOTOR_C_SPEED := 0         : integer;
+ 
+ % Contact sensors
+ %----------------
+ input TOUCH_1;
+ input TOUCH_2;
+ input TOUCH_3;
+ 
+ % Light sensors
+ %--------------
+ constant DEFAULT_LIGHT_THRESHHOLD = 50 : integer;
+ 
+ sensor LIGHT_1_VALUE : integer;  % current light measure 
+                                  % set light sensor threshhold
+ output SET_LIGHT_1_THRESHHOLD := DEFAULT_LIGHT_THRESHHOLD : integer; 
+ input  LIGHT_LOW_1;              % pure signal if below threshhold
+ input  LIGHT_HIGH_1;             % pure signal if above threshhold
+ 
+ sensor LIGHT_2_VALUE : integer; 
+ output SET_LIGHT_2_THRESHHOLD := DEFAULT_LIGHT_THRESHHOLD : integer;
+ input  LIGHT_LOW_2; 
+ input  LIGHT_HIGH_2;
+ 
+ sensor LIGHT_3_VALUE : integer;
+ output SET_LIGHT_3_THRESHHOLD : integer; 
+ input  LIGHT_LOW_3; 
+ input  LIGHT_HIGH_3;
+ 
+ % If argument is MOTOR_FWD, returns MOTOR_REV and vice versa.
+ % Else returns argument. Automatically defined in C generated 
+ % code.
+ function CHANGE_MOTOR_DIR(integer) : integer;
+ 
+ 
+ % Screen display
+ %---------------
+ output CPUTS : string;
+ 
+
+
+=head1 OPTIONS
+
+Options are the same as the Esterel C code generator options. With
+B<-simul> option, there is no B<main> function nor output functions
+defined and the C generated can be compiled and tested using B<xes>.
+
+=head1 SEE ALSO
+
+L<esterel>, L<scc>, L<occ>, L<sscc>
+
+=head1 AUTHOR
+
+Xavier Fornari E<lt>F<Xavier.Fornari@sophia.inria.fr>E<gt>
+
+=cut

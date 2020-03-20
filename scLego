@@ -1,0 +1,15 @@
+#!/bin/sh
+PERL=perl
+
+if test -z "$ESTEREL"
+then
+  ESTEREL=/0/meije/fornari/esterel/v5_21
+fi
+
+export ESTEREL
+if test -z "$SCLEGO" 
+then
+  SCLEGO=$ESTEREL/lib/Lego/scLego
+fi
+
+exec $PERL $SCLEGO "$@"
