@@ -5,6 +5,14 @@ Original Website – https://web.imt-atlantique.fr/x-info/lego/
 
 Usage Instructions - https://web.imt-atlantique.fr/x-info/lego/scLego.html
 
+
+## Prerequisites
+* Esterel compiler:  As this provides an Esterel back-end for Lego C with BrickOS-Bibo, installation of a working Esterel compiler is necessary
+  - Esterel compiler downloads are included with the archived scLego release posted in this repository as the initial release
+  - [Esterel.org Downloads from old Esterel website](http://www-sop.inria.fr/esterel.org/filesv5_92/Html/Downloads/Soft/SoftwareDownloads.htm) (download links on new Esterel website are currently broken)
+  - [Purported Debian packages](https://www.df7cb.de/debian/esterel/)  (however, based on Esterl.org, the information on this website that Esterel 5.2.1a is newer than 5_92 is _incorrect_)
+  
+
 ## Integration with BrickOS-Bibo
 Esterel examples are already bundled with BrickOS-Bibo, so by installing
 the Esterel compiler and this add-on for the Esterel compiler, you will
