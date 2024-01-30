@@ -23,7 +23,7 @@ References
   + [Esterel.org Downloads from old Esterel website](http://www-sop.inria.fr/esterel.org/filesv5_92/Html/Downloads/Soft/SoftwareDownloads.htm) (download links on new Esterel website are currently broken)
     - [Esterel v5.92 compiler distribution files for Windows NT, Red Hat Linux, and Sun Solaris](https://www-sop.inria.fr/esterel.org/filesv5_92/Html/Downloads/Soft/Ev592Downloads.htm)
   + [Purported Debian packages](https://www.df7cb.de/debian/esterel/)
-    - Per Esterl.org, the note on this website that Esterel 5.2.1a is newer than 5_92 is _incorrect_:  [Release Notes for Esterel v5_92](http://www-sop.inria.fr/esterel.org/filesv5_92/Html/Downloads/Soft/ReleaseNotesV592.htm)
+    - Per Esterl.org, the note on this website that Esterel 5.2.1a is newer than 5_92 is _incorrect_ (c.f. [Release Notes for Esterel v5_92](http://www-sop.inria.fr/esterel.org/filesv5_92/Html/Downloads/Soft/ReleaseNotesV592.htm))
   
 
 ## Integration with BrickOS-Bibo
