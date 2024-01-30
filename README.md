@@ -14,7 +14,7 @@ The language is presented in the Esterel Primer (PDF).
 * Esterel Virtual Machine (EVM) project
   + [Project Plan](https://www1.cs.columbia.edu/~sedwards/classes/2002/w4995-02/vasee-lit.pdf)
   + [Final Report](https://www1.cs.columbia.edu/~sedwards/classes/2002/w4995-02/vasee-final.pdf)
-* Potential alternate compiler – [CDC: The Columbia Esterel Compiler](https://www1.cs.columbia.edu/~sedwards/cec/) (open source)
+* Potential alternate compiler – [CEC: The Columbia Esterel Compiler](https://www1.cs.columbia.edu/~sedwards/cec/) (open source)
 
 
 ## Prerequisites
