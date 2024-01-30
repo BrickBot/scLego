@@ -6,7 +6,7 @@ It belongs to the family of synchronous languages, which also includes Lustre, S
 
 The language is presented in the Esterel Primer (PDF).
 
-References
+## References
 * Description from [About Esterel](https://web.archive.org/web/20071219203108/https://www-sop.inria.fr/esterel.org/Html/About/AboutEsterel.htm)
 * [Original Website](https://web.imt-atlantique.fr/x-info/lego/) — Frame-based website: Select the "with Esterel" link from the sidebar on the left
   + [Usage Instructions](https://web.imt-atlantique.fr/x-info/lego/scLego.html)
@@ -14,6 +14,7 @@ References
 * Esterel Virtual Machine (EVM) project
   + [Project Plan](https://www1.cs.columbia.edu/~sedwards/classes/2002/w4995-02/vasee-lit.pdf)
   + [Final Report](https://www1.cs.columbia.edu/~sedwards/classes/2002/w4995-02/vasee-final.pdf)
+* Potential alternate compiler – [CDC: The Columbia Esterel Compiler](https://www1.cs.columbia.edu/~sedwards/cec/) (open source)
 
 
 ## Prerequisites
