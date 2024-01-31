@@ -15,6 +15,7 @@ The language is presented in the Esterel Primer (PDF).
   + [Project Plan](https://www1.cs.columbia.edu/~sedwards/classes/2002/w4995-02/vasee-lit.pdf)
   + [Final Report](https://www1.cs.columbia.edu/~sedwards/classes/2002/w4995-02/vasee-final.pdf)
 * Potential alternate compiler – [CEC: The Columbia Esterel Compiler](https://www1.cs.columbia.edu/~sedwards/cec/) (open source)
+  + [A fork updated to work with CMake](https://github.com/dilawar/cec-esteral)
 * Related project - [Ministrel](https://github.com/acorrenson/Ministrel): A “toy” synchronous language for reactive programming highly inspired by Esterel.
 
 
